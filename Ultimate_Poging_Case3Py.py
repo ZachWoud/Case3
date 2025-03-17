@@ -36,7 +36,7 @@ for idx, row in metro_data.iterrows():
         lat, lon = stations_dict[station_name]
         
         # Scale factor for the circle radius
-        scale_factor = 100000
+        scale_factor = 1000
         radius = busy_value / scale_factor if pd.notnull(busy_value) else 2
         
         folium.CircleMarker(
