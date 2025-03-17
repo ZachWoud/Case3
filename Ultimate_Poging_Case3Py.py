@@ -38,7 +38,7 @@ for idx, row in metro_data.iterrows():
         lat, lon = stations_dict[station_name]
 
         # Adjust the scale factor if needed
-        scale_factor = 100000  # e.g. 100k instead of 1 million
+        scale_factor = 10000  # e.g. 100k instead of 1 million
         radius = busy_value / scale_factor
 
         folium.CircleMarker(
