@@ -4,15 +4,8 @@ from streamlit_folium import folium_static
 import pandas as pd
 import plotly.express as px
 
-# Voorbeeldbestanden
-bestanden = [
-    '2021 Q2 spring (Apr-Jun)-Central.csv',
-    '2021 Q3 (Jul-Sep)-Central.csv',
-    '2021 Q4 autumn (Oct-Dec)-Central.csv'
-]
-
-dfs = [pd.read_csv(file) for file in bestanden]
-fiets_data_jaar = pd.concat(dfs, ignore_index=True)
+# Lees fietsdata (per dag) in
+fiets_data = pd.read_csv('fietsdata2021_rentals_by_day.csv')
 
 # Weather-data inlezen; index_col=0 als de datum in de eerste kolom staat
 weer_data = pd.read_csv('weather_london.csv', index_col=0)
@@ -22,38 +15,32 @@ metro_data = pd.read_csv('AC2021_AnnualisedEntryExit.csv', sep=';')
 metro_stations_data = pd.read_csv('London stations.csv')
 
 # 1) Datumkolommen op juiste formaat
-# Fietsdata: DD/MM/YYYY -> datetime
-fiets_data_jaar['Date'] = pd.to_datetime(fiets_data_jaar['Date'], format='%d/%m/%Y')
-
+# Fietsdata: 'Day' omzetten naar datetime en opslaan als 'Date'
+fiets_data['Date'] = pd.to_datetime(fiets_data['Day'])
 # Weerdata: index omzetten naar datetime en daarna als kolom opslaan
 weer_data.index = pd.to_datetime(weer_data.index, format='%Y-%m-%d', errors='coerce')
 weer_data = weer_data.reset_index().rename(columns={'index': 'Date'})
 
 # 2) Controleer op missing values en verwijder die indien nodig
-#    Zo voorkom je dat 'lege' dagen toch meege-merged worden.
-fiets_data_jaar.dropna(subset=['Date', 'Count'], inplace=True)
+fiets_data.dropna(subset=['Date', 'Total Rentals'], inplace=True)
 weer_data.dropna(subset=['Date', 'tavg'], inplace=True)
 
-# 3) Groepeer fietsdata per dag en tel de counts op
-bike_daily = fiets_data_jaar.groupby('Date')['Count'].sum().reset_index()
+# 3) Merge de datasets op overlappende data (inner join)
+merged_data = pd.merge(weer_data, fiets_data, on='Date', how='inner')
 
-# 4) Merge alleen op overlappende data (inner) => uitsluitend dagen die in beide sets voorkomen
-merged_data = pd.merge(weer_data, bike_daily, on='Date', how='inner')
-
-# 5) Plot een scatterplot met Plotly
+# 4) Plot de scatterplot met Plotly: tavg vs Total Rentals
 fig = px.scatter(
     merged_data,
     x='tavg', 
-    y='Count',
+    y='Total Rentals',
     hover_data=['Date'],
-    labels={'tavg': 'Gemiddelde Temperatuur (°C)', 'Count': 'Aantal Fietsers per Dag'},
-    title='Correlatie tussen Weer en Fietsers'
+    labels={'tavg': 'Gemiddelde Temperatuur (°C)', 'Total Rentals': 'Aantal Fietsverhuur per Dag'},
+    title='Correlatie tussen Weer en Fietsverhuur'
 )
 st.plotly_chart(fig)
 
 # ----------------------------------------------------
-# Hieronder de rest van je code voor de Folium-kaart, 
-# als je die ook wilt tonen.
+# Folium-kaart code blijft ongewijzigd
 # ----------------------------------------------------
 
 # Dictionary van station-locaties
