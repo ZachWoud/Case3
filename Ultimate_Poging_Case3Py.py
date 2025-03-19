@@ -4,7 +4,7 @@ from streamlit_folium import folium_static
 import pandas as pd
 import plotly.express as px
 
-# Inlezen van de bestanden
+# Voorbeeldbestanden
 bestanden = [
     '2021 Q2 spring (Apr-Jun)-Central.csv',
     '2021 Q3 (Jul-Sep)-Central.csv',
@@ -14,30 +14,58 @@ bestanden = [
 dfs = [pd.read_csv(file) for file in bestanden]
 fiets_data_jaar = pd.concat(dfs, ignore_index=True)
 
-# Door index_col=0 te gebruiken, zorg je ervoor dat de eerste kolom (datum) als index wordt ingelezen.
+# Weather-data inlezen; index_col=0 als de datum in de eerste kolom staat
 weer_data = pd.read_csv('weather_london.csv', index_col=0)
+
+# Metro-data
 metro_data = pd.read_csv('AC2021_AnnualisedEntryExit.csv', sep=';')
 metro_stations_data = pd.read_csv('London stations.csv')
 
-# Format de datumkolom in fiets_data_jaar van DD/MM/YYYY naar datetime
+# 1) Datumkolommen op juiste formaat
+# Fietsdata: DD/MM/YYYY -> datetime
 fiets_data_jaar['Date'] = pd.to_datetime(fiets_data_jaar['Date'], format='%d/%m/%Y')
 
-# Weerdata: Zet de index (die nu de datum bevat) om naar datetime en maak er een 'Date'-kolom van.
-weer_data.index = pd.to_datetime(weer_data.index, format='%Y-%m-%d')
+# Weerdata: index omzetten naar datetime en daarna als kolom opslaan
+weer_data.index = pd.to_datetime(weer_data.index, format='%Y-%m-%d', errors='coerce')
 weer_data = weer_data.reset_index().rename(columns={'index': 'Date'})
 
-# Maak een dictionary met stations { "StationName": (latitude, longitude) }
+# 2) Controleer op missing values en verwijder die indien nodig
+#    Zo voorkom je dat 'lege' dagen toch meege-merged worden.
+fiets_data_jaar.dropna(subset=['Date', 'Count'], inplace=True)
+weer_data.dropna(subset=['Date', 'tavg'], inplace=True)
+
+# 3) Groepeer fietsdata per dag en tel de counts op
+bike_daily = fiets_data_jaar.groupby('Date')['Count'].sum().reset_index()
+
+# 4) Merge alleen op overlappende data (inner) => uitsluitend dagen die in beide sets voorkomen
+merged_data = pd.merge(weer_data, bike_daily, on='Date', how='inner')
+
+# 5) Plot een scatterplot met Plotly
+fig = px.scatter(
+    merged_data,
+    x='tavg', 
+    y='Count',
+    hover_data=['Date'],
+    labels={'tavg': 'Gemiddelde Temperatuur (°C)', 'Count': 'Aantal Fietsers per Dag'},
+    title='Correlatie tussen Weer en Fietsers'
+)
+st.plotly_chart(fig)
+
+# ----------------------------------------------------
+# Hieronder de rest van je code voor de Folium-kaart, 
+# als je die ook wilt tonen.
+# ----------------------------------------------------
+
+# Dictionary van station-locaties
 stations_dict = {
     row["Station"]: (row["Latitude"], row["Longitude"]) 
     for _, row in metro_stations_data.iterrows()
 }
 
-# Maak een folium map
 m = folium.Map(location=[51.509865, -0.118092], tiles='CartoDB positron', zoom_start=11)
 
-# Voeg cirkelmarkers toe voor elk metrostation
 for idx, row in metro_data.iterrows():
-    station_name = row["Station"]  # Zorg dat deze kolomnaam klopt met je CSV
+    station_name = row["Station"]
     busy_value = pd.to_numeric(row["AnnualisedEnEx"], errors="coerce")
     if station_name in stations_dict:
         lat, lon = stations_dict[station_name]
@@ -52,19 +80,3 @@ for idx, row in metro_data.iterrows():
         ).add_to(m)
 
 folium_static(m)
-
-# Groepeer fietsdata per dag en tel de counts op (96 rijen per dag)
-bike_daily = fiets_data_jaar.groupby('Date')['Count'].sum().reset_index()
-
-# Merge de weerdata met de geaggregeerde fietsdata op datum
-merged_data = pd.merge(weer_data, bike_daily, on='Date', how='inner')
-
-# Maak de scatterplot met Plotly: gemiddelde temperatuur vs. aantal fietsers per dag
-fig = px.scatter(merged_data, 
-                 x='tavg', 
-                 y='Count', 
-                 hover_data=['Date'],
-                 labels={'tavg': 'Gemiddelde Temperatuur (°C)', 'Count': 'Aantal Fietsers per Dag'},
-                 title='Correlatie tussen Weer en Fietsers')
-
-st.plotly_chart(fig)
