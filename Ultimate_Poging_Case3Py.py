@@ -2,6 +2,7 @@ import streamlit as st
 import folium
 from streamlit_folium import folium_static
 import pandas as pd
+import plotly.express as px
 
 bestanden = [
     '2021 Q2 spring (Apr-Jun)-Central.csv',
@@ -15,6 +16,12 @@ fiets_data_jaar = pd.concat(dfs, ignore_index=True)
 weer_data = pd.read_csv('weather_london.csv')
 metro_data = pd.read_csv('AC2021_AnnualisedEntryExit.csv', sep = ';')
 metro_stations_data = pd.read_csv('London stations.csv')
+
+fiets_data_jaar['Date'] = pd.to_datetime(fiets_data_jaar['Date'], format='%d/%m/%Y')
+
+# Weerdata: Zorg dat de index (datum in YYYY-MM-DD) ook datetime is, en zet 'Date' als kolom
+weer_data.index = pd.to_datetime(weer_data.index, format='%Y-%m-%d')
+weer_data = weer_data.reset_index().rename(columns={'index': 'Date'})
 
 # Dictionary of { "StationName": (latitude, longitude) }
 stations_dict = {
@@ -48,3 +55,21 @@ for idx, row in metro_data.iterrows():
         ).add_to(m)
 
 folium_static(m)
+
+bike_daily = fiets_data_jaar.groupby('Date')['Count'].sum().reset_index()
+
+# Merge de weerdata en de geaggregeerde fietsdata op de datum
+merged_data = pd.merge(weer_data, bike_daily, on='Date', how='inner')
+
+# --- Scatterplot maken met Plotly ---
+
+# We plotten de correlatie tussen gemiddelde temperatuur en het aantal fietsers per dag.
+fig = px.scatter(merged_data, 
+                 x='tavg', 
+                 y='Count', 
+                 hover_data=['Date'],
+                 labels={'tavg': 'Gemiddelde Temperatuur (°C)', 'Count': 'Aantal Fietsers per Dag'},
+                 title='Correlatie tussen Weer en Fietsers')
+
+# Toon de plot in Streamlit
+st.plotly_chart(fig)
