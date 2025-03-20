@@ -3,3 +3,6 @@ streamlit
 pandas
 streamlit_folium
 plotly.express
+seaborn
+matplotlib
+statsmodels
